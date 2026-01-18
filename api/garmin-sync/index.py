@@ -7,18 +7,10 @@ from garminconnect import Garmin
 from supabase import create_client, Client
 
 # Configure Garmin Token storage to use /tmp (Vercel has write access to /tmp)
-token_dir = tempfile.gettempdir()
-os.environ['GARMINTOKENS'] = token_dir
+os.environ['GARMINTOKENS'] = tempfile.gettempdir()
 
-# Workaround for python-garminconnect/garth FileNotFoundError
-# If the files don't exist, the library sometimes crashes trying to read them.
-# We create empty JSON files to satisfy the read check, enforcing a fresh login.
-def init_token_files():
-    for filename in ['oauth1_token.json', 'oauth2_token.json']:
-        path = os.path.join(token_dir, filename)
-        if not os.path.exists(path):
-            with open(path, 'w') as f:
-                json.dump({}, f)
+# Security: Only allow sync for specific user if configured
+ALLOWED_USER_ID = os.environ.get('ALLOWED_USER_ID')
 
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
@@ -52,6 +44,12 @@ class handler(BaseHTTPRequestHandler):
                 self.send_success_j({'status': 'ignored', 'reason': 'no record'})
                 return
 
+            # SECURITY CHECK
+            if ALLOWED_USER_ID and record.get('user_id') != ALLOWED_USER_ID:
+                print(f"Security: Skipping sync for user {record.get('user_id')} (Not Allowed)", file=sys.stdout)
+                self.send_success_j({'status': 'ignored', 'reason': 'user not allowed'})
+                return
+
             sip_timestamp = record.get('timestamp')
             volume_ml = record.get('volume_ml')
             # Check if it was already synced (loop prevention, though unlikely with INSERT trigger)
@@ -74,21 +72,33 @@ class handler(BaseHTTPRequestHandler):
             password = os.environ.get('GARMIN_PASSWORD')
             
             if not email or not password:
-                raise Exception("Missing Garmin Credentials (GARMIN_EMAIL or GARMIN_PASSWORD)")
+                raise Exception("Missing Garmin Credentials")
 
             print(f"Logging in to Garmin as {email}...", file=sys.stdout)
-            
-            # Initialize tokens to prevent FileNotFoundError
-            init_token_files()
             
             # Garmin Login
             # Note: serverless cold start means we login often. 
             # ideally we'd store tokens in supabase secrets or DB, but that's complex for phase 2.
             # /tmp helps for warm starts.
             garmin = Garmin(email, password)
-            garmin.login()
             
-            print("Garmin Login Successful", file=sys.stdout)
+            try:
+                # Try standard login (might try to load tokens and fail)
+                garmin.login()
+                print("Garmin Login Successful (Standard)", file=sys.stdout)
+            except Exception as login_err:
+                print(f"Warning: garmin.login() failed: {login_err}. Trying force login via garth...", file=sys.stdout)
+                try:
+                    # Fallback: Force garth login directly, bypassing token load attempt
+                    # This requires accessing the internal garth client if exposed
+                    if hasattr(garmin, 'garth'):
+                         garmin.garth.login(email, password)
+                         print("Garmin Login Successful (Garth Force)", file=sys.stdout)
+                    else:
+                        raise login_err
+                except Exception as garth_err:
+                    print(f"Error: Force login failed: {garth_err}", file=sys.stderr)
+                    raise garth_err
 
             # Add Hydration
             print(f"Adding hydration: {amount_to_sync}ml", file=sys.stdout)
