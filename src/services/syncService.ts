@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { useHydrationStore } from '../store/hydrationStore';
-import type { BottleSip, ManualEntry } from '../types';
+
 
 export const syncService = {
     isSyncing: false,

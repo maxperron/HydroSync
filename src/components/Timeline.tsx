@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useHydrationStore } from '../store/hydrationStore';
-import { Trash2, Edit2, Droplet, Coffee, Wine, Beer, Milk, Cloud, Watch, Activity } from 'lucide-react';
+import { Trash2, Edit2, Droplet, Coffee, Wine, Beer, Milk, Cloud, Activity } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { clsx } from 'clsx';
 import type { BottleSip, ManualEntry } from '../types';
