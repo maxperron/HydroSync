@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    /* M3 Expressive - Bold Violet/Indigo Theme */
+    /* Vibrant, saturated, and energetic palette */
+
+    --background: 270 50% 98%;
+    /* Very Light Lavender */
+    --foreground: 270 60% 15%;
+    /* Deep Violet/Indigo Text */
+
+    --card: 0 0% 100%;
+    /* White Cards (surface) */
+    --card-foreground: 270 60% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 270 60% 15%;
+
+    --primary: 270 80% 60%;
+    /* Vivid Violet/Purple */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 270 30% 92%;
+    /* Soft Lavender */
+    --secondary-foreground: 270 60% 20%;
+
+    --muted: 270 20% 94%;
+    --muted-foreground: 270 40% 50%;
+
+    --accent: 300 90% 60%;
+    /* Hot Fuchsia/Pink Accent */
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 270 30% 90%;
+    --input: 270 30% 90%;
+    --ring: 270 80% 60%;
+
+    /* M3 Expressive Radius */
+    --radius: 2rem;
+    /* 32px standard */
+    --radius-sm: 1rem;
+    --radius-full: 9999px;
+  }
+
+  .dark {
+    /* M3 Dark - Deep Violet/Black OLED Friendly */
+    --background: 270 50% 5%;
+    /* Almost Black/Violet */
+    --foreground: 270 20% 90%;
+    /* White/Lilac Text */
+
+    --card: 270 50% 8%;
+    /* Dark Cards */
+    --card-foreground: 270 20% 90%;
+
+    --popover: 270 50% 8%;
+    --popover-foreground: 270 20% 90%;
+
+    --primary: 270 80% 65%;
+    /* Lighter Violet for Dark Mode */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 270 30% 15%;
+    /* Dark Lavender */
+    --secondary-foreground: 270 20% 90%;
+
+    --muted: 270 20% 15%;
+    --muted-foreground: 270 20% 60%;
+
+    --accent: 300 90% 60%;
+    /* Fuchsia POP */
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 270 30% 15%;
+    --input: 270 30% 15%;
+    --ring: 270 80% 65%;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: 'Outfit', sans-serif;
+    /* M3 Expressive Font Alternative */
+  }
+}
+
+/* Custom M3 Utilities */
+.text-display {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
