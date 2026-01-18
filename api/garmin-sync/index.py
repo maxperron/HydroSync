@@ -7,10 +7,18 @@ from garminconnect import Garmin
 from supabase import create_client, Client
 
 # Configure Garmin Token storage to use /tmp (Vercel has write access to /tmp)
-# The library checks GARMINTOKENS env var
-os.environ['GARMINTOKENS'] = tempfile.gettempdir()
-# Alternatively, we can just login every time if we don't care about rate limits for now,
-# but using /tmp helps if the container is warm.
+token_dir = tempfile.gettempdir()
+os.environ['GARMINTOKENS'] = token_dir
+
+# Workaround for python-garminconnect/garth FileNotFoundError
+# If the files don't exist, the library sometimes crashes trying to read them.
+# We create empty JSON files to satisfy the read check, enforcing a fresh login.
+def init_token_files():
+    for filename in ['oauth1_token.json', 'oauth2_token.json']:
+        path = os.path.join(token_dir, filename)
+        if not os.path.exists(path):
+            with open(path, 'w') as f:
+                json.dump({}, f)
 
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
@@ -69,6 +77,9 @@ class handler(BaseHTTPRequestHandler):
                 raise Exception("Missing Garmin Credentials (GARMIN_EMAIL or GARMIN_PASSWORD)")
 
             print(f"Logging in to Garmin as {email}...", file=sys.stdout)
+            
+            # Initialize tokens to prevent FileNotFoundError
+            init_token_files()
             
             # Garmin Login
             # Note: serverless cold start means we login often. 
