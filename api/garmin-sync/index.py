@@ -34,38 +34,51 @@ class handler(BaseHTTPRequestHandler):
 
             print(f"Received Payload: {json.dumps(payload)}", file=sys.stdout) # Verbose log
 
-            # Supabase Webhook Payload Structure:
-            # { "type": "INSERT", "table": "sips", "record": { ... }, "schema": "public", "old_record": null }
+            event_type = payload.get('type')
             
-            record = payload.get('record')
-            if not record:
-                # Could be a ping or different event
-                print("Warning: No 'record' found in payload", file=sys.stdout)
-                self.send_success_j({'status': 'ignored', 'reason': 'no record'})
-                return
+            # Initialize record variable
+            record = None
 
-            # SECURITY CHECK
-            if ALLOWED_USER_ID and record.get('user_id') != ALLOWED_USER_ID:
-                print(f"Security: Skipping sync for user {record.get('user_id')} (Not Allowed)", file=sys.stdout)
-                self.send_success_j({'status': 'ignored', 'reason': 'user not allowed'})
-                return
+            if event_type == 'DELETE':
+                record = payload.get('old_record')
+                if not record:
+                    print("Warning: No 'old_record' found in DELETE payload", file=sys.stdout)
+                    self.send_success_j({'status': 'ignored', 'reason': 'no old_record'})
+                    return
+                # For deletion, we want to REMOVE hydration.
+                # Garmin doesn't support "delete", so we add a negative value.
+                volume_ml = record.get('volume_ml')
+                amount_to_sync = -1 * volume_ml if volume_ml else 0
+                print(f"Processing DELETE: Removing {volume_ml}ml (sending {amount_to_sync}ml)", file=sys.stdout)
 
-            sip_timestamp = record.get('timestamp')
-            volume_ml = record.get('volume_ml')
-            # Check if it was already synced (loop prevention, though unlikely with INSERT trigger)
-            if record.get('is_synced_garmin'):
-                print("Info: Already synced", file=sys.stdout)
-                self.send_success_j({'status': 'ignored', 'reason': 'already synced'})
-                return
+            elif event_type == 'INSERT' or event_type == 'UPDATE':
+                record = payload.get('record')
+                if not record:
+                    # Could be a ping or different event
+                    print("Warning: No 'record' found in payload", file=sys.stdout)
+                    self.send_success_j({'status': 'ignored', 'reason': 'no record'})
+                    return
 
-            # amount_to_sync is volume_ml. 
-            # Note: We assume volume_ml is positive.
-            amount_to_sync = volume_ml 
-            
-            if not amount_to_sync or amount_to_sync <= 0:
-                 print(f"Info: Invalid amount {amount_to_sync}", file=sys.stdout)
-                 self.send_success_j({'status': 'ignored', 'reason': 'zero or negative volume'})
+                # Check if it was already synced (loop prevention)
+                if record.get('is_synced_garmin'):
+                    print("Info: Already synced", file=sys.stdout)
+                    self.send_success_j({'status': 'ignored', 'reason': 'already synced'})
+                    return
+                
+                amount_to_sync = record.get('volume_ml')
+
+            else:
+                 print(f"Info: Ignored event type {event_type}", file=sys.stdout)
+                 self.send_success_j({'status': 'ignored', 'reason': f'ignored event type {event_type}'})
                  return
+
+            if not amount_to_sync or amount_to_sync == 0:
+                 print(f"Info: Invalid amount {amount_to_sync}", file=sys.stdout)
+                 self.send_success_j({'status': 'ignored', 'reason': 'zero volume'})
+                 return
+
+            # Common Logic Extracts
+            sip_timestamp = record.get('timestamp')
 
             # Fetch Credentials from Database
             url = os.environ.get('SUPABASE_URL')
