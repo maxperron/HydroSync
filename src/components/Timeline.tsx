@@ -40,7 +40,7 @@ const SyncStatus = ({ synced, type }: { synced: boolean, type: 'cloud' | 'garmin
 };
 
 export const Timeline: React.FC<TimelineProps> = ({ bottleSips, manualEntries }) => {
-    const { deleteManualEntry, user } = useHydrationStore();
+    const { deleteManualEntry, deleteBottleSip, user } = useHydrationStore();
     const [isEditMode, setIsEditMode] = useState(false);
 
     const mergedEntries = useMemo(() => {
@@ -130,9 +130,16 @@ export const Timeline: React.FC<TimelineProps> = ({ bottleSips, manualEntries })
                                 )}
                             </div>
 
-                            {isEditMode && entry.type === 'manual' && (
+                            {isEditMode && (
                                 <button
-                                    onClick={() => deleteManualEntry(entry.id)}
+                                    onClick={() => {
+                                        if (entry.type === 'manual') {
+                                            deleteManualEntry(entry.id);
+                                        } else {
+                                            // Bottle sip ID is sip-timestamp. Or use original timestamp from entry.
+                                            deleteBottleSip(entry.timestamp);
+                                        }
+                                    }}
                                     className="p-3 text-destructive hover:bg-destructive/10 rounded-full transition active:scale-90"
                                 >
                                     <Trash2 className="w-5 h-5" />
