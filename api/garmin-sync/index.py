@@ -128,17 +128,28 @@ class handler(BaseHTTPRequestHandler):
             
             print(f"Adding hydration: {amount_to_sync}ml", file=sys.stdout)
             
-            from datetime import datetime, timezone
+            from datetime import datetime
+            try:
+                from zoneinfo import ZoneInfo
+            except ImportError:
+                # Fallback for Python < 3.9 (though Vercel is usually 3.9+)
+                from datetime import timezone, timedelta
+                class ZoneInfo:
+                    def __init__(self, key): pass
+                    def utcoffset(self, dt): return timedelta(hours=-5) # Rough EST fallback
             
             # Use current time or the sip timestamp
+            target_tz = ZoneInfo("America/Montreal") # Hardcoded to user's region preference (yul1) for Phase 2
+            
             if sip_timestamp:
-                dt = datetime.fromtimestamp(sip_timestamp / 1000, tz=timezone.utc)
+                # sip_timestamp is usually ms epoch
+                dt_utc = datetime.fromtimestamp(sip_timestamp / 1000, tz=timezone.utc)
+                dt_local = dt_utc.astimezone(target_tz)
             else:
-                dt = datetime.now(timezone.utc)
+                dt_local = datetime.now(target_tz)
                 
-            calendar_date = dt.strftime("%Y-%m-%d")
-            # timestampLocal is ISO format, usually without Z for some Garmin APIs, but we'll try standard ISO
-            timestamp_local = dt.isoformat()
+            calendar_date = dt_local.strftime("%Y-%m-%d")
+            timestamp_local = dt_local.isoformat()
 
             hydration_payload = {
                 "valueInML": amount_to_sync,
