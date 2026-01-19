@@ -128,7 +128,7 @@ export const useHydrationStore = create<HydrationState & DebugState>()(
             // Merge server data with local state
             mergeSyncData: (serverSips: BottleSip[], serverManual: ManualEntry[]) => set((state) => {
                 // Merge Bottle Sips
-                const existingTimestamps = new Set(state.bottleSips.map(s => s.timestamp));
+
                 // We could also update existing synced flags, but simplistic merge is:
                 // Keep local state (preserves pending syncs), add strictly new server items.
                 // But what if server is "more synced" than local? 
