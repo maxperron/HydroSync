@@ -27,6 +27,7 @@ export interface HydrationPreset {
     volumeMl: number;
     hydrationFactor: number;
     icon?: string;
+    is_synced_cloud?: boolean;
 }
 
 export type ThemeType = 'light' | 'dark' | 'system';
@@ -69,10 +70,15 @@ export interface HydrationState {
 
     // Phase 2.0 Auth & Sync
     pendingDeletions: string[];
+    pendingPresetDeletions: string[]; // Queue for preset deletions
     user: User | null;
     setUser: (user: User | null) => void;
     deleteBottleSip: (timestamp: number) => void;
+
+    // Sync Methods
+    markPresetsAsSyncedCloud: (ids: string[]) => void;
     mergeSyncData: (serverSips: BottleSip[], serverManual: ManualEntry[]) => void;
+    mergePresetSyncData: (serverPresets: HydrationPreset[]) => void;
 }
 
 // Re-export User if needed or just use it in the interface above
