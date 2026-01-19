@@ -128,7 +128,7 @@ class handler(BaseHTTPRequestHandler):
             
             print(f"Adding hydration: {amount_to_sync}ml", file=sys.stdout)
             
-            from datetime import datetime
+            from datetime import datetime, timezone
             try:
                 from zoneinfo import ZoneInfo
             except ImportError:
