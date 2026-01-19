@@ -154,6 +154,77 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onClose }) => {
                     </div>
                 </section>
 
+                {/* Integrations Section */}
+                <section>
+                    <h3 className="text-sm font-bold text-primary uppercase tracking-widest mb-4 pl-1">Integrations</h3>
+                    <div className="bg-card rounded-[2rem] border border-border p-6 shadow-sm">
+                        <div className="pt-6 border-t border-border/20">
+                            <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-widest mb-4">Garmin Connect</h4>
+
+                            <div className="bg-secondary/30 rounded-2xl p-4 border border-border/20">
+                                <div className="flex items-center gap-3 mb-4">
+                                    <div className="p-2 bg-[#007cc3]/10 rounded-full">
+                                        <Activity className="w-5 h-5 text-[#007cc3]" />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="font-bold text-base">Garmin Connect</span>
+                                        <span className="text-xs text-muted-foreground">Sync hydration data automatically</span>
+                                    </div>
+                                </div>
+
+                                <form
+                                    onSubmit={async (e) => {
+                                        e.preventDefault();
+                                        const form = e.target as HTMLFormElement;
+                                        const email = (form.elements.namedItem('email') as HTMLInputElement).value;
+                                        const password = (form.elements.namedItem('password') as HTMLInputElement).value;
+
+                                        if (!user) return;
+                                        const { error } = await supabase
+                                            .from('user_integrations')
+                                            .upsert({ user_id: user.id, garmin_email: email, garmin_password: password });
+
+                                        if (error) {
+                                            alert('Error saving credentials: ' + error.message);
+                                        } else {
+                                            alert('Garmin credentials saved!');
+                                            // Optionally clear password field for security UI, but keeping it simple for now
+                                        }
+                                    }}
+                                    className="space-y-3"
+                                >
+                                    <div>
+                                        <label className="text-xs font-semibold text-muted-foreground ml-1">Email</label>
+                                        <input
+                                            name="email"
+                                            type="email"
+                                            placeholder="Garmin Email"
+                                            className="w-full mt-1 p-3 rounded-xl bg-card border border-border/20 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all text-sm"
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-semibold text-muted-foreground ml-1">Password</label>
+                                        <input
+                                            name="password"
+                                            type="password"
+                                            placeholder="Garmin Password"
+                                            className="w-full mt-1 p-3 rounded-xl bg-card border border-border/20 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all text-sm"
+                                            required
+                                        />
+                                    </div>
+                                    <button
+                                        type="submit"
+                                        className="w-full py-3 mt-2 bg-[#007cc3] hover:bg-[#005a8e] text-white rounded-xl font-bold text-sm transition-all active:scale-95 shadow-lg shadow-[#007cc3]/20"
+                                    >
+                                        Link Account
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
                 {/* App Info */}
                 <div className="text-center pt-8 opacity-50">
                     <p className="text-xs font-bold uppercase tracking-widest">HydroSync v1.3.0</p>
