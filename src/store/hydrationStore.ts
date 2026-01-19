@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { HydrationState, ManualEntry, BottleSip } from '../types';
+import type { HydrationState, ManualEntry, BottleSip, HydrationPreset } from '../types';
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
 
@@ -23,6 +23,7 @@ export const useHydrationStore = create<HydrationState & DebugState>()(
             lastPacketHex: null,
 
             pendingDeletions: [],
+            pendingPresetDeletions: [],
 
             user: null,
             setUser: (user) => set({ user }),
@@ -56,7 +57,7 @@ export const useHydrationStore = create<HydrationState & DebugState>()(
                     const hydrationFactor = updates.hydrationFactor ?? entry.hydrationFactor;
                     const calculatedVolumeMl = Math.round(volumeMl * (hydrationFactor / 100));
 
-                    return { ...entry, ...updates, calculatedVolumeMl };
+                    return { ...entry, ...updates, calculatedVolumeMl, is_synced_cloud: false }; // Mark unsynced on update
                 });
                 return { manualEntries: newEntries };
             }),
@@ -74,10 +75,6 @@ export const useHydrationStore = create<HydrationState & DebugState>()(
 
             deleteManualEntry: (id) => set((state) => {
                 const pending = [...state.pendingDeletions];
-                // For manual entries, the ID is already the UUID used in DB
-                // But we only want to delete from cloud if it was ever synced? 
-                // Actually, if we delete it before it syncs, we just remove it.
-                // But simpler to just always attempt push delete.
                 if (state.user) {
                     pending.push(id);
                 }
@@ -88,16 +85,23 @@ export const useHydrationStore = create<HydrationState & DebugState>()(
             }),
 
             savePreset: (presetData) => set((state) => ({
-                presets: [...state.presets, { id: generateId(), ...presetData }]
+                presets: [...state.presets, { id: generateId(), ...presetData, is_synced_cloud: false }]
             })),
 
             updatePreset: (id, updates) => set((state) => ({
-                presets: state.presets.map(p => p.id === id ? { ...p, ...updates } : p)
+                presets: state.presets.map(p => p.id === id ? { ...p, ...updates, is_synced_cloud: false } : p)
             })),
 
-            deletePreset: (id) => set((state) => ({
-                presets: state.presets.filter((p) => p.id !== id)
-            })),
+            deletePreset: (id) => set((state) => {
+                const pending = [...state.pendingPresetDeletions];
+                if (state.user) {
+                    pending.push(id);
+                }
+                return {
+                    presets: state.presets.filter((p) => p.id !== id),
+                    pendingPresetDeletions: pending
+                };
+            }),
 
             setDailyGoal: (goal) => set({ defaultGoal: goal }),
             setGoalForDate: (date, goal) => set((state) => ({
@@ -113,6 +117,10 @@ export const useHydrationStore = create<HydrationState & DebugState>()(
             })),
             markManualEntriesAsSyncedCloud: (ids: string[]) => set((state) => ({
                 manualEntries: state.manualEntries.map(e => ids.includes(e.id) ? { ...e, is_synced_cloud: true } : e)
+            })),
+
+            markPresetsAsSyncedCloud: (ids: string[]) => set((state) => ({
+                presets: state.presets.map(p => ids.includes(p.id) ? { ...p, is_synced_cloud: true } : p)
             })),
 
             markSipsAsSyncedGarmin: (timestamps: number[]) => set((state) => ({
@@ -162,6 +170,24 @@ export const useHydrationStore = create<HydrationState & DebugState>()(
                     manualEntries: Array.from(manualMap.values()).sort((a, b) => a.timestamp - b.timestamp)
                 };
             }),
+
+            mergePresetSyncData: (serverPresets: HydrationPreset[]) => set((state) => {
+                const presetMap = new Map<string, HydrationPreset>();
+                serverPresets.forEach(p => presetMap.set(p.id, { ...p, is_synced_cloud: true }));
+
+                state.presets.forEach(p => {
+                    if (!p.is_synced_cloud) {
+                        // Keep unsynced local changes (might conflict, but last write wins usually handled by UI)
+                        // If we have local unsynced, we keep it.
+                        presetMap.set(p.id, p);
+                    }
+                    // Strict sync: if synced but missing from server -> deleted.
+                });
+
+                return {
+                    presets: Array.from(presetMap.values())
+                };
+            })
         }),
         {
             name: 'hydration-storage', // name of the item in the storage (must be unique)
@@ -175,6 +201,7 @@ export const useHydrationStore = create<HydrationState & DebugState>()(
                 defaultGoal: state.defaultGoal,
                 theme: state.theme,
                 pendingDeletions: state.pendingDeletions,
+                pendingPresetDeletions: state.pendingPresetDeletions
                 // Don't persist user, let supabase auth listener handle it
             }),
         }
