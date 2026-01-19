@@ -56,7 +56,7 @@ function App() {
 
     const handleSync = () => {
       if (navigator.onLine) {
-        syncService.uploadPendingSips(user.id);
+        syncService.syncAll(user.id);
       }
     };
 
