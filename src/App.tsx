@@ -38,14 +38,17 @@ function App() {
         window.history.replaceState(null, '', window.location.pathname);
       }
 
-      // Fetch History if logged in
-      if (newUser && navigator.onLine) {
-        syncService.fetchHistory(newUser.id);
-      }
     });
 
     return () => subscription.unsubscribe();
   }, [setUser]);
+
+  // Fetch History whenever user is set (Login, Reload, Session Restore)
+  useEffect(() => {
+    if (user && navigator.onLine) {
+      syncService.fetchHistory(user.id);
+    }
+  }, [user]);
 
   // Sync Listener (Auto-sync when data changes)
   useEffect(() => {
