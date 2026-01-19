@@ -124,12 +124,56 @@ function App() {
       )
       .subscribe();
 
+    const channelPresets = supabase.channel('presets_updates')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'presets' },
+        (payload) => {
+          if (payload.eventType === 'DELETE') {
+            if (payload.old && payload.old.id) {
+              // We don't have a direct "delete synced preset" action that doesn't trigger another delete sync?
+              // deletePreset in store adds to pendingDeletions. 
+              // We need a silent delete or just ignore self-echo?
+              // Actually deletePreset adds to queue.
+              // But if we receive a delete from server, we should just remove it locally and NOT add to queue.
+              // we lack `deletePresetSilent`.
+              // But `mergePresetSyncData` handles deletions if we pass the full list.
+              // Receiving a single DELETE event is tricky if we don't have a "remove from store" method.
+              // `deletePreset` adds to pending.
+              // We can manually manipulate store state here? 
+              // Or just trigger a fetch? Triggering fetch is safer but slower.
+              // Let's manually remove from presets array in store state.
+              useHydrationStore.setState(state => ({
+                presets: state.presets.filter(p => p.id !== payload.old.id)
+              }));
+            }
+          } else {
+            // INSERT or UPDATE
+            const p = payload.new;
+            if (p.user_id !== user.id) return;
+
+            const preset = {
+              id: p.id,
+              name: p.name,
+              volumeMl: p.volume_ml,
+              hydrationFactor: p.hydration_factor,
+              icon: p.icon,
+              is_synced_cloud: true
+            };
+            // Use merge to update/insert
+            useHydrationStore.getState().mergePresetSyncData([preset]);
+          }
+        }
+      )
+      .subscribe();
+
     const timeout = setTimeout(handleSync, 2000);
 
     return () => {
       window.removeEventListener('online', handleSync);
       clearTimeout(timeout);
       supabase.removeChannel(channel);
+      supabase.removeChannel(channelPresets);
     }
   }, [user, bottleSips, manualEntries]);
 
