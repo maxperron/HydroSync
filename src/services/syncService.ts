@@ -5,14 +5,54 @@ import { useHydrationStore } from '../store/hydrationStore';
 export const syncService = {
     isSyncing: false,
 
+    async deletePendingSips(userId: string) {
+        // Can run concurrently with upload, but let's be safe
+        const { pendingDeletions } = useHydrationStore.getState();
+        if (pendingDeletions.length === 0) return;
+
+        console.log(`Syncing deletions: ${pendingDeletions.length} items`);
+
+        try {
+            // We can batch delete by IDs
+            const { error } = await supabase
+                .from('sips')
+                .delete()
+                .in('id', pendingDeletions);
+
+            if (error) {
+                console.error("Delete sync failed:", error);
+            } else {
+                console.log("Delete sync successful");
+                // Remove from pendingDeletions
+                // We need to modify the store directly here? No, store needs a method?
+                // Ideally store should handle its state updates.
+                // But we don't have a 'removePendingDeletions' method.
+                // We can use setState from zustand if exported, or just add a helper to store.
+                // For now, let's just hack it via direct setState or assume we can add a method.
+
+                // Let's add removePendingDeletions to store first? 
+                // Or actually, just update the store with a filter.
+                useHydrationStore.setState((state) => ({
+                    pendingDeletions: state.pendingDeletions.filter(id => !pendingDeletions.includes(id))
+                }));
+            }
+        } catch (err) {
+            console.error("Delete sync error:", err);
+        }
+    },
+
     async uploadPendingSips(userId: string) {
         if (this.isSyncing) return;
         this.isSyncing = true;
+
+        // Also run deletions!
+        await this.deletePendingSips(userId);
 
         const { bottleSips, manualEntries, markSipsAsSyncedCloud, markManualEntriesAsSyncedCloud } = useHydrationStore.getState();
 
         try {
             // 1. Filter Pending Items
+            // ... (rest of function)
             const pendingSips = bottleSips.filter(s => !s.is_synced_cloud);
             const pendingManual = manualEntries.filter(e => !e.is_synced_cloud);
 
