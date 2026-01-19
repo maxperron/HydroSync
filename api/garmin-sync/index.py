@@ -67,12 +67,33 @@ class handler(BaseHTTPRequestHandler):
                  self.send_success_j({'status': 'ignored', 'reason': 'zero or negative volume'})
                  return
 
-            # Connect to Garmin
-            email = os.environ.get('GARMIN_EMAIL')
-            password = os.environ.get('GARMIN_PASSWORD')
+            # Fetch Credentials from Database
+            url = os.environ.get('SUPABASE_URL')
+            key = os.environ.get('SUPABASE_SERVICE_KEY')
+            if not url or not key:
+                raise Exception("Missing Supabase Service Configuration")
+
+            db_client: Client = create_client(url, key)
+            
+            user_id = record.get('user_id')
+            if not user_id:
+                raise Exception("Missing user_id in record")
+
+            # Get credentials for this specific user
+            creds_response = db_client.table('user_integrations').select('garmin_email, garmin_password').eq('user_id', user_id).execute()
+            
+            if not creds_response.data or len(creds_response.data) == 0:
+                print(f"Info: No Garmin Integrations found for user {user_id}", file=sys.stdout)
+                self.send_success_j({'status': 'ignored', 'reason': 'no garmin integration linked'})
+                return
+
+            email = creds_response.data[0]['garmin_email']
+            password = creds_response.data[0]['garmin_password']
             
             if not email or not password:
-                raise Exception("Missing Garmin Credentials")
+                 print(f"Info: Incomplete credentials for user {user_id}", file=sys.stdout)
+                 self.send_success_j({'status': 'ignored', 'reason': 'incomplete credentials'})
+                 return
 
             print(f"Logging in to Garmin as {email}...", file=sys.stdout)
             
