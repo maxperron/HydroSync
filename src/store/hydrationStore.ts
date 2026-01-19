@@ -22,6 +22,8 @@ export const useHydrationStore = create<HydrationState & DebugState>()(
             batteryLevel: null,
             lastPacketHex: null,
 
+            pendingDeletions: [],
+
             user: null,
             setUser: (user) => set({ user }),
 
@@ -29,39 +31,32 @@ export const useHydrationStore = create<HydrationState & DebugState>()(
                 bottleSips: [...state.bottleSips, { ...sip, is_synced_cloud: false, is_synced_garmin: false }]
             })),
 
-            addManualEntry: (entryData) => {
-                const calculatedVolumeMl = Math.round(entryData.volumeMl * (entryData.hydrationFactor / 100));
-                const newEntry: ManualEntry = {
-                    id: generateId(),
-                    timestamp: Date.now(),
-                    source: 'manual',
-                    calculatedVolumeMl,
-                    is_synced_cloud: false,
-                    is_synced_garmin: false,
-                    ...entryData
+            deleteBottleSip: (timestamp) => set((state) => {
+                const pending = [...state.pendingDeletions];
+                if (state.user) {
+                    // key format matching syncService logic
+                    pending.push(`${state.user.id}-${timestamp}-bottle`);
+                }
+                return {
+                    bottleSips: state.bottleSips.filter(s => s.timestamp !== timestamp),
+                    pendingDeletions: pending
                 };
-                set((state) => ({
-                    manualEntries: [...state.manualEntries, newEntry]
-                }));
-            },
-
-            updateManualEntry: (id, updates) => set((state) => {
-                const newEntries = state.manualEntries.map((entry) => {
-                    if (entry.id !== id) return entry;
-
-                    // Recalculate if volume or factor changes
-                    const volumeMl = updates.volumeMl ?? entry.volumeMl;
-                    const hydrationFactor = updates.hydrationFactor ?? entry.hydrationFactor;
-                    const calculatedVolumeMl = Math.round(volumeMl * (hydrationFactor / 100));
-
-                    return { ...entry, ...updates, calculatedVolumeMl };
-                });
-                return { manualEntries: newEntries };
             }),
 
-            deleteManualEntry: (id) => set((state) => ({
-                manualEntries: state.manualEntries.filter((e) => e.id !== id)
-            })),
+            deleteManualEntry: (id) => set((state) => {
+                const pending = [...state.pendingDeletions];
+                // For manual entries, the ID is already the UUID used in DB
+                // But we only want to delete from cloud if it was ever synced? 
+                // Actually, if we delete it before it syncs, we just remove it.
+                // But simpler to just always attempt push delete.
+                if (state.user) {
+                    pending.push(id);
+                }
+                return {
+                    manualEntries: state.manualEntries.filter((e) => e.id !== id),
+                    pendingDeletions: pending
+                };
+            }),
 
             savePreset: (presetData) => set((state) => ({
                 presets: [...state.presets, { id: generateId(), ...presetData }]
@@ -112,6 +107,7 @@ export const useHydrationStore = create<HydrationState & DebugState>()(
                 dailyGoals: state.dailyGoals,
                 defaultGoal: state.defaultGoal,
                 theme: state.theme,
+                pendingDeletions: state.pendingDeletions,
                 // Don't persist user, let supabase auth listener handle it
             }),
         }
