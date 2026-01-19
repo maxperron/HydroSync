@@ -49,8 +49,9 @@ export const syncService = {
                     manualEntries.push({
                         id: row.id,
                         timestamp: row.timestamp,
-                        name: 'Manual Entry', // We don't store name in DB currently! Fallback.
-                        volumeMl: Math.round(row.volume_ml / (row.hydration_factor / 100)), // Reverse calc? Or just store raw volume as is?
+                        name: row.name || 'Manual Entry', // Restore name or default
+                        icon: row.icon,                   // Restore icon
+                        volumeMl: Math.round(row.volume_ml / (row.hydration_factor / 100)),
                         // Wait, DB stores volume_ml which IS calculatedVolumeMl for manual entries based on my upload logic.
                         // And we store hydration_factor.
                         // So raw volumeMl = row.volume_ml / factor.
@@ -133,7 +134,6 @@ export const syncService = {
 
         try {
             // 1. Filter Pending Items
-            // ... (rest of function)
             const pendingSips = bottleSips.filter(s => !s.is_synced_cloud);
             const pendingManual = manualEntries.filter(e => !e.is_synced_cloud);
 
@@ -165,6 +165,8 @@ export const syncService = {
                 volume_ml: e.calculatedVolumeMl, // We store the Calculated Volume as the truth
                 source: 'manual',
                 hydration_factor: e.hydrationFactor,
+                name: e.name, // Save Name
+                icon: e.icon, // Save Icon
                 is_synced_garmin: e.is_synced_garmin || false
             }));
 
