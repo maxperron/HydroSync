@@ -1,4 +1,3 @@
-```typescript
 import React from 'react';
 import { useHydrationStore } from '../store/hydrationStore';
 import { supabase, signInWithGoogle, signOut } from '../services/supabase';
