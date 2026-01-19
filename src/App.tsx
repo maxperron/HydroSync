@@ -51,22 +51,62 @@ function App() {
       }
     };
 
-    // Initial sync on load/login
+    // Initial sync
     handleSync();
-
-    // Listen for online status
     window.addEventListener('online', handleSync);
 
-    // Debounced sync on data change could be here, or we simple assume 
-    // that whenever we add data we can try to sync if online?
-    // For now, let's just use an interval check or rely on specific triggers.
-    // Actually, listening to `bottleSips` and `manualEntries` changes is better.
-    // We'll debounce it slightly to avoid spamming if multiple sips come in fast.
+    // Subscribe to Realtime Updates (Garmin Sync Status from Python Function)
+    const channel = supabase.channel('sips_updates')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'sips' }, // Filter logic inside callback for now
+        (payload) => {
+          // We receive { new: { id: "...", is_synced_garmin: true, ... }, ... }
+          // ID format: 
+          // Bottle: `${userId}-${timestamp}-bottle`
+          // Manual: UUID (which corresponds to entry.id)
+
+          const newRecord = payload.new;
+          if (newRecord.user_id !== user.id) return; // Ignore other users
+
+          if (newRecord.is_synced_garmin) {
+            const { markSipsAsSyncedGarmin, markManualEntriesAsSyncedGarmin } = useHydrationStore.getState();
+
+            if (newRecord.source === 'bottle') {
+              // Parse timestamp from ID: user_id-timestamp-bottle
+              // userId might contain dashes, so split by '-' might be tricky.
+              // But we constructed it as `${userId}-${s.timestamp}-bottle`. 
+              // Safer to iterate or regex match?
+              // Actually, we can just split by '-' and take the *second to last* part?
+              // id parts: [ ...uuid_parts, timestamp, 'bottle' ]
+              // UUID has 5 parts. so 5 dashes.
+              // Let's rely on finding the timestamp part.
+
+              // HACK: user_id is UUID (36 chars). 
+              // ID = uuid + '-' + timestamp + '-bottle'
+              const parts = newRecord.id.split('-');
+              if (parts.length >= 6) {
+                const tsStr = parts[parts.length - 2];
+                const ts = parseInt(tsStr);
+                if (!isNaN(ts)) {
+                  markSipsAsSyncedGarmin([ts]);
+                }
+              }
+            } else if (newRecord.source === 'manual') {
+              // ID is just the manual entry ID (UUID usually, or random string)
+              markManualEntriesAsSyncedGarmin([newRecord.id]);
+            }
+          }
+        }
+      )
+      .subscribe();
+
     const timeout = setTimeout(handleSync, 2000);
 
     return () => {
       window.removeEventListener('online', handleSync);
       clearTimeout(timeout);
+      supabase.removeChannel(channel);
     }
   }, [user, bottleSips, manualEntries]);
 
