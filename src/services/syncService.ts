@@ -83,111 +83,135 @@ export const syncService = {
 
             // Update Store
             useHydrationStore.getState().mergeSyncData(bottleSips, manualEntries);
+
+            // Fetch Presets
+            const { data: presetData, error: presetError } = await supabase
+                .from('presets')
+                .select('*')
+                .eq('user_id', userId);
+
+            if (presetError) {
+                console.error("Error fetching presets:", presetError);
+            } else if (presetData) {
+                const presets: any[] = presetData.map(p => ({
+                    id: p.id,
+                    name: p.name,
+                    volumeMl: p.volume_ml,
+                    hydrationFactor: p.hydration_factor,
+                    icon: p.icon,
+                    is_synced_cloud: true
+                }));
+                useHydrationStore.getState().mergePresetSyncData(presets);
+                console.log(`Fetched ${presets.length} presets.`);
+            }
+
             console.log(`Fetched ${bottleSips.length} sips and ${manualEntries.length} manual entries.`);
         }
     },
 
-    async deletePendingSips() {
-        // Can run concurrently with upload, but let's be safe
-        const { pendingDeletions } = useHydrationStore.getState();
-        if (pendingDeletions.length === 0) return;
+    async deletePendingItems() {
+        const { pendingDeletions, pendingPresetDeletions } = useHydrationStore.getState();
 
-        console.log(`Syncing deletions: ${pendingDeletions.length} items`);
-
-        try {
-            // We can batch delete by IDs
-            const { error } = await supabase
-                .from('sips')
-                .delete()
-                .in('id', pendingDeletions);
-
-            if (error) {
-                console.error("Delete sync failed:", error);
-            } else {
-                console.log("Delete sync successful");
-                // Remove from pendingDeletions
-                // We need to modify the store directly here? No, store needs a method?
-                // Ideally store should handle its state updates.
-                // But we don't have a 'removePendingDeletions' method.
-                // We can use setState from zustand if exported, or just add a helper to store.
-                // For now, let's just hack it via direct setState or assume we can add a method.
-
-                // Let's add removePendingDeletions to store first? 
-                // Or actually, just update the store with a filter.
+        // 1. Delete Sips
+        if (pendingDeletions.length > 0) {
+            console.log(`Deleting ${pendingDeletions.length} sips...`);
+            const { error } = await supabase.from('sips').delete().in('id', pendingDeletions);
+            if (!error) {
+                // Cleanup store queue
                 useHydrationStore.setState((state) => ({
                     pendingDeletions: state.pendingDeletions.filter(id => !pendingDeletions.includes(id))
                 }));
+            } else {
+                console.error("Error deleting sips:", error);
             }
-        } catch (err) {
-            console.error("Delete sync error:", err);
+        }
+
+        // 2. Delete Presets
+        if (pendingPresetDeletions.length > 0) {
+            console.log(`Deleting ${pendingPresetDeletions.length} presets...`);
+            const { error } = await supabase.from('presets').delete().in('id', pendingPresetDeletions);
+            if (!error) {
+                useHydrationStore.setState((state) => ({
+                    pendingPresetDeletions: state.pendingPresetDeletions.filter(id => !pendingPresetDeletions.includes(id))
+                }));
+            } else {
+                console.error("Error deleting presets:", error);
+            }
         }
     },
 
-    async uploadPendingSips(userId: string) {
+    async syncAll(userId: string) {
         if (this.isSyncing) return;
         this.isSyncing = true;
 
-        // Also run deletions!
-        await this.deletePendingSips();
-
-        const { bottleSips, manualEntries, markSipsAsSyncedCloud, markManualEntriesAsSyncedCloud } = useHydrationStore.getState();
-
         try {
-            // 1. Filter Pending Items
+            // 1. Run Deletions
+            await this.deletePendingItems();
+
+            const { bottleSips, manualEntries, presets, markSipsAsSyncedCloud, markManualEntriesAsSyncedCloud, markPresetsAsSyncedCloud } = useHydrationStore.getState();
+
+            // 2. Sync Sips & Manual Entries
             const pendingSips = bottleSips.filter(s => !s.is_synced_cloud);
             const pendingManual = manualEntries.filter(e => !e.is_synced_cloud);
 
-            if (pendingSips.length === 0 && pendingManual.length === 0) {
-                this.isSyncing = false;
-                return;
+            if (pendingSips.length > 0 || pendingManual.length > 0) {
+                console.log(`Syncing ${pendingSips.length} sips and ${pendingManual.length} manual entries...`);
+
+                const sipsPayload = pendingSips.map(s => ({
+                    id: `${userId}-${s.timestamp}-bottle`,
+                    user_id: userId,
+                    timestamp: s.timestamp,
+                    volume_ml: s.volumeMl,
+                    source: 'bottle',
+                    is_synced_garmin: s.is_synced_garmin || false
+                }));
+
+                const manualPayload = pendingManual.map(e => ({
+                    id: e.id,
+                    user_id: userId,
+                    timestamp: e.timestamp,
+                    volume_ml: e.calculatedVolumeMl,
+                    source: 'manual',
+                    hydration_factor: e.hydrationFactor,
+                    name: e.name,
+                    icon: e.icon,
+                    is_synced_garmin: e.is_synced_garmin || false
+                }));
+
+                const allPayload = [...sipsPayload, ...manualPayload];
+
+                const { error } = await supabase.from('sips').upsert(allPayload, { onConflict: 'id' });
+
+                if (error) {
+                    console.error("Sync failed:", error);
+                } else {
+                    if (pendingSips.length > 0) markSipsAsSyncedCloud(pendingSips.map(s => s.timestamp));
+                    if (pendingManual.length > 0) markManualEntriesAsSyncedCloud(pendingManual.map(e => e.id));
+                    console.log("Sips synced successfully");
+                }
             }
 
-            console.log(`Syncing ${pendingSips.length} sips and ${pendingManual.length} manual entries...`);
+            // 3. Sync Presets
+            const pendingPresets = presets.filter(p => !p.is_synced_cloud);
+            if (pendingPresets.length > 0) {
+                console.log(`Syncing ${pendingPresets.length} presets...`);
+                const presetPayload = pendingPresets.map(p => ({
+                    id: p.id,
+                    user_id: userId,
+                    name: p.name,
+                    volume_ml: p.volumeMl,
+                    hydration_factor: p.hydrationFactor,
+                    icon: p.icon
+                }));
 
-            // 2. Prepare Data for Supabase
-            // We use 'id' as timestamp string for bottle items if we really need a unique ID, 
-            // but bottle sips don't have a specific ID in our store, just timestamp.
-            // Let's generate a unique composite ID: `${userId}-${timestamp}-bottle`
+                const { error } = await supabase.from('presets').upsert(presetPayload, { onConflict: 'id' });
 
-            const sipsPayload = pendingSips.map(s => ({
-                id: `${userId}-${s.timestamp}-bottle`,
-                user_id: userId,
-                timestamp: s.timestamp,
-                volume_ml: s.volumeMl,
-                source: 'bottle',
-                is_synced_garmin: s.is_synced_garmin || false
-            }));
-
-            const manualPayload = pendingManual.map(e => ({
-                id: e.id, // Manual entries have UUIDs already
-                user_id: userId,
-                timestamp: e.timestamp,
-                volume_ml: e.calculatedVolumeMl, // We store the Calculated Volume as the truth
-                source: 'manual',
-                hydration_factor: e.hydrationFactor,
-                name: e.name, // Save Name
-                icon: e.icon, // Save Icon
-                is_synced_garmin: e.is_synced_garmin || false
-            }));
-
-            const allPayload = [...sipsPayload, ...manualPayload];
-
-            // 3. Push to Supabase
-            const { error } = await supabase
-                .from('sips')
-                .upsert(allPayload, { onConflict: 'id' });
-
-            if (error) {
-                console.error("Sync failed:", error);
-            } else {
-                // 4. Mark as Synced Locally
-                if (pendingSips.length > 0) {
-                    markSipsAsSyncedCloud(pendingSips.map(s => s.timestamp));
+                if (error) {
+                    console.error("Preset sync failed:", error);
+                } else {
+                    markPresetsAsSyncedCloud(pendingPresets.map(p => p.id));
+                    console.log("Presets synced successfully");
                 }
-                if (pendingManual.length > 0) {
-                    markManualEntriesAsSyncedCloud(pendingManual.map(e => e.id));
-                }
-                console.log("Sync successful");
             }
 
         } catch (err) {
