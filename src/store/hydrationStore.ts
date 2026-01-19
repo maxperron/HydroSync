@@ -142,12 +142,9 @@ export const useHydrationStore = create<HydrationState & DebugState>()(
                 state.bottleSips.forEach(s => {
                     if (!s.is_synced_cloud) {
                         sipMap.set(s.timestamp, s);
-                    } else if (!sipMap.has(s.timestamp)) {
-                        // It was synced locally but server doesn't have it? 
-                        // Maybe deleted on server? If so, we should drop it?
-                        // For Phase 2 simple sync: Keep it.
-                        sipMap.set(s.timestamp, s);
                     }
+                    // If is_synced_cloud is true, but it's NOT in the serverSips map (which we populated first),
+                    // then it implies it was deleted on the server. So we DO NOT add it back.
                 });
 
                 // Merge Manual Entries
@@ -156,9 +153,8 @@ export const useHydrationStore = create<HydrationState & DebugState>()(
                 state.manualEntries.forEach(e => {
                     if (!e.is_synced_cloud) {
                         manualMap.set(e.id, e);
-                    } else if (!manualMap.has(e.id)) {
-                        manualMap.set(e.id, e);
                     }
+                    // Same logic: If synced but missing from server, drop it (deleted remotely).
                 });
 
                 return {
