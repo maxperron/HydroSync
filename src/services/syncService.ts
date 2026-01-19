@@ -5,6 +5,87 @@ import { useHydrationStore } from '../store/hydrationStore';
 export const syncService = {
     isSyncing: false,
 
+    // Fetch history from Supabase (Down-Sync)
+    async fetchHistory(userId: string) {
+        console.log("Fetching history...");
+        const { data, error } = await supabase
+            .from('sips')
+            .select('*')
+            .eq('user_id', userId);
+
+        if (error) {
+            console.error("Error fetching history:", error);
+            return;
+        }
+
+        if (data && data.length > 0) {
+            // Parse data into BottleSip and ManualEntry
+            /* Data format from DB:
+               {
+                 id: string,
+                 user_id: string,
+                 timestamp: number,
+                 volume_ml: number,
+                 source: 'bottle' | 'manual',
+                 hydration_factor: number (default 100),
+                 created_at: string,
+                 is_synced_garmin: boolean
+               }
+            */
+
+            const bottleSips: any[] = [];
+            const manualEntries: any[] = [];
+
+            data.forEach(row => {
+                if (row.source === 'bottle') {
+                    bottleSips.push({
+                        timestamp: row.timestamp,
+                        volumeMl: row.volume_ml,
+                        source: 'bottle',
+                        is_synced_cloud: true,
+                        is_synced_garmin: row.is_synced_garmin
+                    });
+                } else {
+                    manualEntries.push({
+                        id: row.id,
+                        timestamp: row.timestamp,
+                        name: 'Manual Entry', // We don't store name in DB currently! Fallback.
+                        volumeMl: Math.round(row.volume_ml / (row.hydration_factor / 100)), // Reverse calc? Or just store raw volume as is?
+                        // Wait, DB stores volume_ml which IS calculatedVolumeMl for manual entries based on my upload logic.
+                        // And we store hydration_factor.
+                        // So raw volumeMl = row.volume_ml / factor.
+                        // Actually, in uploadPendingSips: 
+                        // volume_ml: e.calculatedVolumeMl
+                        // hydration_factor: e.hydrationFactor
+                        // So to reconstruct ManualEntry:
+                        // calculatedVolumeMl = row.volume_ml
+                        // hydrationFactor = row.hydration_factor
+                        // volumeMl (raw) = row.volume_ml / (row.hydration_factor/100)
+
+                        hydrationFactor: row.hydration_factor,
+                        calculatedVolumeMl: row.volume_ml,
+                        source: 'manual',
+                        is_synced_cloud: true,
+                        is_synced_garmin: row.is_synced_garmin
+                    });
+                }
+            });
+
+            // Reconstruct raw volume for manual entries if needed
+            manualEntries.forEach(e => {
+                if (e.hydrationFactor > 0) {
+                    e.volumeMl = Math.round(e.calculatedVolumeMl / (e.hydrationFactor / 100));
+                } else {
+                    e.volumeMl = e.calculatedVolumeMl;
+                }
+            });
+
+            // Update Store
+            useHydrationStore.getState().mergeSyncData(bottleSips, manualEntries);
+            console.log(`Fetched ${bottleSips.length} sips and ${manualEntries.length} manual entries.`);
+        }
+    },
+
     async deletePendingSips() {
         // Can run concurrently with upload, but let's be safe
         const { pendingDeletions } = useHydrationStore.getState();

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { HydrationState, ManualEntry } from '../types';
+import type { HydrationState, ManualEntry, BottleSip } from '../types';
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
 
