@@ -1,7 +1,7 @@
 import React from 'react';
 import { useHydrationStore } from '../store/hydrationStore';
 import { supabase, signInWithGoogle, signOut } from '../services/supabase';
-import { X, Moon, Sun, Monitor, LogOut, Check, Activity } from 'lucide-react';
+import { X, Moon, Sun, Monitor, LogOut, Activity } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { clsx } from 'clsx';
 import type { ThemeType } from '../types';
