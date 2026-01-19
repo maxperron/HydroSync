@@ -30,11 +30,17 @@ function App() {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+      const newUser = session?.user ?? null;
+      setUser(newUser);
 
       // Clean URL hash if it contains auth tokens
       if (session && window.location.hash && window.location.hash.includes('access_token')) {
         window.history.replaceState(null, '', window.location.pathname);
+      }
+
+      // Fetch History if logged in
+      if (newUser && navigator.onLine) {
+        syncService.fetchHistory(newUser.id);
       }
     });
 
