@@ -5,7 +5,7 @@ import { useHydrationStore } from '../store/hydrationStore';
 export const syncService = {
     isSyncing: false,
 
-    async deletePendingSips(userId: string) {
+    async deletePendingSips() {
         // Can run concurrently with upload, but let's be safe
         const { pendingDeletions } = useHydrationStore.getState();
         if (pendingDeletions.length === 0) return;
@@ -46,7 +46,7 @@ export const syncService = {
         this.isSyncing = true;
 
         // Also run deletions!
-        await this.deletePendingSips(userId);
+        await this.deletePendingSips();
 
         const { bottleSips, manualEntries, markSipsAsSyncedCloud, markManualEntriesAsSyncedCloud } = useHydrationStore.getState();
 
