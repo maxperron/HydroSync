@@ -68,8 +68,10 @@ export interface HydrationState {
     markManualEntriesAsSyncedGarmin: (ids: string[]) => void;
 
     // Phase 2.0 Auth & Sync
+    pendingDeletions: string[];
     user: User | null;
     setUser: (user: User | null) => void;
+    deleteBottleSip: (timestamp: number) => void;
 }
 
 // Re-export User if needed or just use it in the interface above
