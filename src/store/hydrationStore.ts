@@ -31,6 +31,35 @@ export const useHydrationStore = create<HydrationState & DebugState>()(
                 bottleSips: [...state.bottleSips, { ...sip, is_synced_cloud: false, is_synced_garmin: false }]
             })),
 
+            addManualEntry: (entryData) => {
+                const calculatedVolumeMl = Math.round(entryData.volumeMl * (entryData.hydrationFactor / 100));
+                const newEntry: ManualEntry = {
+                    id: generateId(),
+                    timestamp: Date.now(),
+                    source: 'manual',
+                    calculatedVolumeMl,
+                    is_synced_cloud: false,
+                    is_synced_garmin: false,
+                    ...entryData
+                };
+                set((state) => ({
+                    manualEntries: [...state.manualEntries, newEntry]
+                }));
+            },
+
+            updateManualEntry: (id, updates) => set((state) => {
+                const newEntries = state.manualEntries.map((entry) => {
+                    if (entry.id !== id) return entry;
+
+                    // Recalculate if volume or factor changes
+                    const volumeMl = updates.volumeMl ?? entry.volumeMl;
+                    const hydrationFactor = updates.hydrationFactor ?? entry.hydrationFactor;
+                    const calculatedVolumeMl = Math.round(volumeMl * (hydrationFactor / 100));
+
+                    return { ...entry, ...updates, calculatedVolumeMl };
+                });
+                return { manualEntries: newEntries };
+            }),
             deleteBottleSip: (timestamp) => set((state) => {
                 const pending = [...state.pendingDeletions];
                 if (state.user) {
