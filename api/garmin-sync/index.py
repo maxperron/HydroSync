@@ -101,8 +101,51 @@ class handler(BaseHTTPRequestHandler):
                     raise garth_err
 
             # Add Hydration
+            # API: garmin.add_hydration(amount_in_ml) does not exist in the library.
+            # We use the internal connectapi method to call the endpoint directly.
+            # Endpoint: /usersummary-service/usersummary/hydration/log
+            
             print(f"Adding hydration: {amount_to_sync}ml", file=sys.stdout)
-            garmin.add_hydration(amount_to_sync)
+            
+            from datetime import datetime, timezone
+            
+            # Use current time or the sip timestamp
+            if sip_timestamp:
+                dt = datetime.fromtimestamp(sip_timestamp / 1000, tz=timezone.utc)
+            else:
+                dt = datetime.now(timezone.utc)
+                
+            calendar_date = dt.strftime("%Y-%m-%d")
+            # timestampLocal is ISO format, usually without Z for some Garmin APIs, but we'll try standard ISO
+            timestamp_local = dt.isoformat()
+
+            hydration_payload = {
+                "valueInML": amount_to_sync,
+                "calendarDate": calendar_date,
+                "timestampLocal": timestamp_local
+            }
+            
+            print(f"Hydration Payload: {json.dumps(hydration_payload)}", file=sys.stdout)
+            
+            try:
+                # Use garmin.connectapi() which handles auth headers and base URL
+                # path should be relative to base URL (usually /usersummary-service/...)
+                garmin.connectapi(
+                    "/usersummary-service/usersummary/hydration/log",
+                    method="PUT",
+                    json=hydration_payload
+                )
+                print("Hydration Added Successfully via API", file=sys.stdout)
+            except Exception as api_err:
+                 print(f"API Error adding hydration: {api_err}", file=sys.stderr)
+                 # Try POST just in case PUT is wrong (some docs say PUT, some POST)
+                 print("Retrying with POST...", file=sys.stdout)
+                 garmin.connectapi(
+                    "/usersummary-service/usersummary/hydration/log",
+                    method="POST",
+                    json=hydration_payload
+                )
+                 print("Hydration Added Successfully via API (POST)", file=sys.stdout)
             
             # Success! Now update Supabase
             url = os.environ.get('SUPABASE_URL')
