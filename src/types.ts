@@ -72,6 +72,7 @@ export interface HydrationState {
     user: User | null;
     setUser: (user: User | null) => void;
     deleteBottleSip: (timestamp: number) => void;
+    mergeSyncData: (serverSips: BottleSip[], serverManual: ManualEntry[]) => void;
 }
 
 // Re-export User if needed or just use it in the interface above

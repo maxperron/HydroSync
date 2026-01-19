@@ -124,6 +124,49 @@ export const useHydrationStore = create<HydrationState & DebugState>()(
 
             theme: 'system',
             setTheme: (theme) => set({ theme }),
+
+            // Merge server data with local state
+            mergeSyncData: (serverSips: BottleSip[], serverManual: ManualEntry[]) => set((state) => {
+                // Merge Bottle Sips
+                const existingTimestamps = new Set(state.bottleSips.map(s => s.timestamp));
+                const newSips = serverSips.filter(s => !existingTimestamps.has(s.timestamp));
+                // We could also update existing synced flags, but simplistic merge is:
+                // Keep local state (preserves pending syncs), add strictly new server items.
+                // But what if server is "more synced" than local? 
+                // Let's assume server data is grounded truth for those timestamps.
+
+                // Better approach: Rebuild list by map
+                const sipMap = new Map<number, BottleSip>();
+                // 1. Put server data first (trusted, synced)
+                serverSips.forEach(s => sipMap.set(s.timestamp, { ...s, is_synced_cloud: true })); // Ensure they are marked synced
+                // 2. Overlay local "unsynced" data (pending upload)
+                state.bottleSips.forEach(s => {
+                    if (!s.is_synced_cloud) {
+                        sipMap.set(s.timestamp, s);
+                    } else if (!sipMap.has(s.timestamp)) {
+                        // It was synced locally but server doesn't have it? 
+                        // Maybe deleted on server? If so, we should drop it?
+                        // For Phase 2 simple sync: Keep it.
+                        sipMap.set(s.timestamp, s);
+                    }
+                });
+
+                // Merge Manual Entries
+                const manualMap = new Map<string, ManualEntry>();
+                serverManual.forEach(e => manualMap.set(e.id, { ...e, is_synced_cloud: true }));
+                state.manualEntries.forEach(e => {
+                    if (!e.is_synced_cloud) {
+                        manualMap.set(e.id, e);
+                    } else if (!manualMap.has(e.id)) {
+                        manualMap.set(e.id, e);
+                    }
+                });
+
+                return {
+                    bottleSips: Array.from(sipMap.values()).sort((a, b) => a.timestamp - b.timestamp),
+                    manualEntries: Array.from(manualMap.values()).sort((a, b) => a.timestamp - b.timestamp)
+                };
+            }),
         }),
         {
             name: 'hydration-storage', // name of the item in the storage (must be unique)
