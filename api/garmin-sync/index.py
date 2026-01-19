@@ -179,18 +179,21 @@ class handler(BaseHTTPRequestHandler):
                 )
                  print("Hydration Added Successfully via API (POST)", file=sys.stdout)
             
-            # Success! Now update Supabase
-            url = os.environ.get('SUPABASE_URL')
-            key = os.environ.get('SUPABASE_SERVICE_KEY')
-            if url and key:
-                print("Updating Supabase record...", file=sys.stdout)
-                try:
-                    supabase: Client = create_client(url, key)
-                    supabase.table('sips').update({'is_synced_garmin': True}).eq('id', record['id']).execute()
-                    print("Supabase update successful", file=sys.stdout)
-                except Exception as db_err:
-                    print(f"Error updating Supabase: {db_err}", file=sys.stderr)
-                    # Don't fail the request if just the status update failed, but good to know.
+            # Success! Now update Supabase (Only for INSERT/UPDATE)
+            if event_type != 'DELETE':
+                url = os.environ.get('SUPABASE_URL')
+                # ... same update logic
+                key = os.environ.get('SUPABASE_SERVICE_KEY')
+                if url and key:
+                    print("Updating Supabase record...", file=sys.stdout)
+                    try:
+                        supabase: Client = create_client(url, key)
+                        supabase.table('sips').update({'is_synced_garmin': True}).eq('id', record['id']).execute()
+                        print("Supabase update successful", file=sys.stdout)
+                    except Exception as db_err:
+                        print(f"Error updating Supabase: {db_err}", file=sys.stderr)
+            else:
+                print("Skipping Supabase update (DELETE event)", file=sys.stdout)
             
             self.send_success_j({'status': 'success', 'synced': amount_to_sync})
             
