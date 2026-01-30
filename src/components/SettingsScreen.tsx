@@ -1,7 +1,7 @@
 import React from 'react';
 import { useHydrationStore } from '../store/hydrationStore';
 import { supabase, signInWithGoogle, signOut } from '../services/supabase';
-import { X, Moon, Sun, Monitor, LogOut, Activity } from 'lucide-react';
+import { X, Moon, Sun, Monitor, LogOut, Activity, Key, RefreshCw, Copy, Check } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { clsx } from 'clsx';
 import type { ThemeType } from '../types';
@@ -50,6 +50,127 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onClose }) => {
             <span className="font-bold text-sm tracking-wide">{label}</span>
         </button>
     );
+
+    const APIKeyManager = ({ user }: { user: any }) => {
+        const [apiKey, setApiKey] = React.useState<string | null>(null);
+        const [isLoading, setIsLoading] = React.useState(false);
+        const [copied, setCopied] = React.useState(false);
+
+        // Fetch existing key on mount
+        React.useEffect(() => {
+            if (!user) return;
+            const fetchKey = async () => {
+                const { data, error } = await supabase
+                    .from('user_integrations')
+                    .select('api_key')
+                    .eq('user_id', user.id)
+                    .single();
+
+                if (data && data.api_key) {
+                    setApiKey(data.api_key);
+                }
+            };
+            fetchKey();
+        }, [user]);
+
+        const generateKey = async () => {
+            if (!user) return;
+            // Confirmation if key exists
+            if (apiKey && !window.confirm("Regenerating user key will invalidate the old one. Continue?")) {
+                return;
+            }
+
+            setIsLoading(true);
+            try {
+                // Generate a random key (client side UUID is fine for this scope, or let DB do it)
+                const newKey = crypto.randomUUID();
+
+                const { error } = await supabase
+                    .from('user_integrations')
+                    .upsert({
+                        user_id: user.id,
+                        api_key: newKey
+                    }, { onConflict: 'user_id' }); // Merge, don't overwrite other fields if possible? 
+                // Upsert needs all non-null fields or it might error if row missing?
+                // Actually supabase upsert merges if ID matches.
+                // But we want to be careful not to wipe garmin creds if they exist.
+                // Upsert behaves like "insert if not exists, update if exists". 
+                // To be safe, let's use Update first, then Insert if fails? 
+                // Or just upsert with explicit ignoreDuplicates? No.
+                // Supabase js upsert merges by default? No, it REPLACES the row unless we specify... 
+                // Actually for "update if exists", we should use .update().
+                // But if row doesn't exist, we need insert.
+
+                // Better strategy: Check existence first or handle error. 
+                // Or simply use upsert but we need to pass existing garmin creds? 
+                // No, supabase PATCH behavior is via .update(). Upsert is PUT/POST.
+
+                // Let's try .update() first.
+                let updateError = (await supabase
+                    .from('user_integrations')
+                    .update({ api_key: newKey })
+                    .eq('user_id', user.id)
+                ).error;
+
+                // If update failed (likely row doesn't exist), try insert
+                if (updateError) {
+                    // Try insert
+                    const { error: insertError } = await supabase
+                        .from('user_integrations')
+                        .insert({ user_id: user.id, api_key: newKey });
+
+                    if (insertError) throw insertError;
+                }
+
+                setApiKey(newKey);
+            } catch (e: any) {
+                alert("Error generating key: " + e.message);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        const copyToClipboard = () => {
+            if (!apiKey) return;
+            navigator.clipboard.writeText(apiKey);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        };
+
+        if (!user) return <p className="text-xs text-muted-foreground">Sign in to manage API keys.</p>;
+
+        return (
+            <div className="flex flex-col gap-3 mt-2">
+                <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-secondary/50 p-3 rounded-xl border border-border/20 font-mono text-xs truncate h-10 flex items-center select-all">
+                        {apiKey ? apiKey : <span className="text-muted-foreground italic">No API Key generated</span>}
+                    </div>
+                    {apiKey && (
+                        <button
+                            onClick={copyToClipboard}
+                            className="p-2.5 bg-secondary hover:bg-secondary/80 rounded-xl transition active:scale-95 border border-border/20"
+                            title="Copy Key"
+                        >
+                            {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                    )}
+                </div>
+
+                <button
+                    onClick={generateKey}
+                    disabled={isLoading}
+                    className="flex items-center justify-center gap-2 py-2.5 px-4 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl font-bold text-sm transition-all active:scale-95 border border-primary/20"
+                >
+                    {isLoading ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                        <Key className="w-4 h-4" />
+                    )}
+                    {apiKey ? "Regenerate Key" : "Generate Key"}
+                </button>
+            </div>
+        );
+    };
 
     return (
         <motion.div
@@ -221,6 +342,24 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onClose }) => {
                                     </button>
                                 </form>
                             </div>
+                        </div>
+                    </div>
+                </section>
+
+                {/* API Access Section */}
+                <section>
+                    <h3 className="text-sm font-bold text-primary uppercase tracking-widest mb-4 pl-1">API Access</h3>
+                    <div className="bg-card rounded-[2rem] border border-border p-6 shadow-sm">
+                        <div className="flex flex-col gap-4">
+                            <p className="text-sm text-muted-foreground">
+                                Use this key to access your hydration history via the API.
+                                <br />
+                                <code className="text-xs bg-secondary px-1 py-0.5 rounded text-foreground mt-1 inline-block">
+                                    GET /api/get-history
+                                </code>
+                            </p>
+
+                            <APIKeyManager user={user} />
                         </div>
                     </div>
                 </section>
