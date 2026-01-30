@@ -60,7 +60,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onClose }) => {
         React.useEffect(() => {
             if (!user) return;
             const fetchKey = async () => {
-                const { data, error } = await supabase
+                const { data } = await supabase
                     .from('user_integrations')
                     .select('api_key')
                     .eq('user_id', user.id)
@@ -85,12 +85,28 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onClose }) => {
                 // Generate a random key (client side UUID is fine for this scope, or let DB do it)
                 const newKey = crypto.randomUUID();
 
+                // Removed unused upsert that was commented out/partially used in comments but invalid logic
+                // The actual logic is below in update/insert pattern.
+                // However, the original code had:
+                /* 
                 const { error } = await supabase
                     .from('user_integrations')
-                    .upsert({
-                        user_id: user.id,
-                        api_key: newKey
-                    }, { onConflict: 'user_id' }); // Merge, don't overwrite other fields if possible? 
+                    .upsert(...)
+                */
+                // But wait, the file content shows lines 88-93 are actual code:
+                /*
+                 const { error } = await supabase
+                     .from('user_integrations')
+                     .upsert({
+                         user_id: user.id,
+                         api_key: newKey
+                     }, { onConflict: 'user_id' });
+                 */
+                // And then logic continues to try update/insert manually below? 
+                // Looking at lines 88-123 in view_file above:
+                // It seems I accidentally left the `upsert` block AND then wrote the `update/insert` fallback logic below it. 
+                // The `upsert` block at 88-93 assigns to `const { error }` but never uses it, and then lines 109+ do the work again.
+                // I should remove the redundant first upsert block entirely. 
                 // Upsert needs all non-null fields or it might error if row missing?
                 // Actually supabase upsert merges if ID matches.
                 // But we want to be careful not to wipe garmin creds if they exist.
