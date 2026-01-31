@@ -85,14 +85,44 @@ class handler(BaseHTTPRequestHandler):
                 .lte('timestamp', ts_end) \
                 .execute()
 
-            # Optional: Transform data if needed, or just return raw
-            # For simplicity and flexibility, raw is usually best for integrations.
-            
+            # Transform data to include local time string
+            # This helps clients (like Home Assistant) see the 'correct' day immediately
+            transformed_data = []
+            for sip in sips_response.data:
+                # sip['timestamp'] is in milliseconds UTC
+                # We want to show the LOCAL time representing that sip
+                ts_ms = sip.get('timestamp', 0)
+                # Local TS = UTC + Offset
+                # (We subtract offset in previous step to go Local -> UTC for filtering)
+                # (Here we add offset to go UTC -> Local representation)
+                # Wait, offset is e.g. -5.
+                # UTC time 03:00. Local is 22:00.
+                # 03:00 + (-5) = -02:00? No. 
+                # UTC timestamp is an absolute point in time.
+                # To get a datetime object representing local time:
+                # dt_utc = datetime.fromtimestamp(ts_ms/1000, timezone.utc)
+                # dt_local = dt_utc + timedelta(hours=tz_offset) -- effectively shifting the "clock face"
+                
+                # Simpler: Just construct string.
+                # timestamp is epoch. 
+                # To get local string: datetime.fromtimestamp(ts, tz=timezone(offset))
+                
+                try:
+                    # Create a timezone-aware object for the user's specified offset
+                    user_tz = timezone(timedelta(hours=tz_offset))
+                    
+                    local_dt = datetime.fromtimestamp(ts_ms / 1000, user_tz)
+                    sip['local_date'] = local_dt.isoformat()
+                    transformed_data.append(sip)
+                except Exception:
+                    transformed_data.append(sip)
+
             data = {
                 "start_date": start_date_str,
                 "end_date": end_date_str,
-                "count": len(sips_response.data),
-                "data": sips_response.data
+                "timezone_offset": tz_offset,
+                "count": len(transformed_data),
+                "data": transformed_data
             }
 
             self.send_success_j(data)
