@@ -4,7 +4,7 @@ import os
 import sys
 from urllib.parse import urlparse, parse_qs
 from supabase import create_client, Client
-from datetime import datetime
+from datetime import datetime, timezone
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -25,21 +25,26 @@ class handler(BaseHTTPRequestHandler):
 
             # Validate Date Format
             try:
-                start_dt = datetime.strptime(start_date_str, "%Y-%m-%d")
-                end_dt = datetime.strptime(end_date_str, "%Y-%m-%d")
-                # Create timestamps for filtering (start of start_date to end of end_date)
-                # Note: 'timestamp' in Supabase is likely epoch ms or big int. 
-                # Let's check schema assumption. Store saves Date.now() which is ms.
-                # So we need ms timestamps.
+                start_dt = datetime.strptime(start_date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                end_dt = datetime.strptime(end_date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
                 
-                # Start: 00:00:00 of start_date
-                ts_start = int(start_dt.timestamp() * 1000) 
+                # Timezone Offset (in hours, e.g., -5 for EST)
+                # Client sends their offset from UTC.
+                # If Client is EST (-5), they want 00:00 EST which is 05:00 UTC.
+                # So we SUBTRACT the offset from the UTC base?
+                # Target UTC = Local - Offset
+                # 00:00 EST - (-5h) = 05:00 UTC. Correct.
+                tz_offset = float(params.get('timezone_offset', [0])[0])
+                offset_seconds = tz_offset * 3600
                 
-                # End: 23:59:59 of end_date (add 1 day, sub 1 ms)
-                ts_end = int(end_dt.replace(hour=23, minute=59, second=59, microsecond=999999).timestamp() * 1000)
+                # Start: 00:00:00 of start_date (Client Time) -> Adjusted to UTC
+                ts_start = int((start_dt.timestamp() - offset_seconds) * 1000)
+                
+                # End: 23:59:59 of end_date (Client Time) -> Adjusted to UTC
+                ts_end = int((end_dt.replace(hour=23, minute=59, second=59, microsecond=999999).timestamp() - offset_seconds) * 1000)
 
             except ValueError:
-                self.send_error_j(400, "Invalid date format. Use YYYY-MM-DD")
+                self.send_error_j(400, "Invalid date/offset format. Use YYYY-MM-DD and integer/float for offset")
                 return
 
             # 2. Authentication (API Key)
