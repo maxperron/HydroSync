@@ -8,15 +8,37 @@ export const syncService = {
     // Fetch history from Supabase (Down-Sync)
     async fetchHistory(userId: string) {
         console.log("Fetching history...");
-        const { data, error } = await supabase
-            .from('sips')
-            .select('*')
-            .eq('user_id', userId);
+        let allData: any[] = [];
+        let from = 0;
+        const limit = 1000;
+        let fetchMore = true;
 
-        if (error) {
-            console.error("Error fetching history:", error);
-            return;
+        while (fetchMore) {
+            const { data, error } = await supabase
+                .from('sips')
+                .select('*')
+                .eq('user_id', userId)
+                .order('timestamp', { ascending: false })
+                .range(from, from + limit - 1);
+
+            if (error) {
+                console.error("Error fetching history:", error);
+                return;
+            }
+
+            if (data && data.length > 0) {
+                allData = [...allData, ...data];
+                if (data.length < limit) {
+                    fetchMore = false;
+                } else {
+                    from += limit;
+                }
+            } else {
+                fetchMore = false;
+            }
         }
+
+        const data = allData;
 
         if (data && data.length > 0) {
             // Parse data into BottleSip and ManualEntry
