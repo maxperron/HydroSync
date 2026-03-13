@@ -67,10 +67,12 @@ export interface HydrationState {
     markManualEntriesAsSyncedCloud: (ids: string[]) => void;
     markSipsAsSyncedGarmin: (timestamps: number[]) => void;
     markManualEntriesAsSyncedGarmin: (ids: string[]) => void;
+    markGoalsAsSyncedCloud: (dates: string[]) => void;
 
     // Phase 2.0 Auth & Sync
     pendingDeletions: string[];
     pendingPresetDeletions: string[]; // Queue for preset deletions
+    unsyncedGoals: string[]; // Queue for unsynced goal dates
     user: User | null;
     setUser: (user: User | null) => void;
     deleteBottleSip: (timestamp: number) => void;
@@ -79,6 +81,7 @@ export interface HydrationState {
     markPresetsAsSyncedCloud: (ids: string[]) => void;
     mergeSyncData: (serverSips: BottleSip[], serverManual: ManualEntry[]) => void;
     mergePresetSyncData: (serverPresets: HydrationPreset[]) => void;
+    mergeGoalSyncData: (serverGoals: Record<string, number>) => void;
 }
 
 // Re-export User if needed or just use it in the interface above

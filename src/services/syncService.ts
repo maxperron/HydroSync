@@ -127,6 +127,23 @@ export const syncService = {
                 console.log(`Fetched ${presets.length} presets.`);
             }
 
+            // Fetch Goals
+            const { data: goalData, error: goalError } = await supabase
+                .from('daily_goals')
+                .select('*')
+                .eq('user_id', userId);
+
+            if (goalError) {
+                console.error("Error fetching goals:", goalError);
+            } else if (goalData) {
+                const serverGoals: Record<string, number> = {};
+                goalData.forEach(g => {
+                    serverGoals[g.date] = g.goal;
+                });
+                useHydrationStore.getState().mergeGoalSyncData(serverGoals);
+                console.log(`Fetched ${goalData.length} goals.`);
+            }
+
             console.log(`Fetched ${bottleSips.length} sips and ${manualEntries.length} manual entries.`);
         }
     },
@@ -233,6 +250,30 @@ export const syncService = {
                 } else {
                     markPresetsAsSyncedCloud(pendingPresets.map(p => p.id));
                     console.log("Presets synced successfully");
+                }
+            }
+
+            // 4. Sync Goals
+            const { dailyGoals, defaultGoal, unsyncedGoals, markGoalsAsSyncedCloud } = useHydrationStore.getState();
+            if (unsyncedGoals.length > 0) {
+                console.log(`Syncing ${unsyncedGoals.length} goals...`);
+                
+                const goalPayload = unsyncedGoals.map(date => {
+                    const goal = date === 'default' ? defaultGoal : (dailyGoals[date] || defaultGoal);
+                    return {
+                        user_id: userId,
+                        date: date,
+                        goal: goal
+                    };
+                });
+
+                const { error } = await supabase.from('daily_goals').upsert(goalPayload, { onConflict: 'user_id,date' });
+
+                if (error) {
+                    console.error("Goal sync failed:", error);
+                } else {
+                    markGoalsAsSyncedCloud(unsyncedGoals);
+                    console.log("Goals synced successfully");
                 }
             }
 

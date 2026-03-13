@@ -24,6 +24,7 @@ export const useHydrationStore = create<HydrationState & DebugState>()(
 
             pendingDeletions: [],
             pendingPresetDeletions: [],
+            unsyncedGoals: [],
 
             user: null,
             setUser: (user) => set({ user }),
@@ -103,10 +104,19 @@ export const useHydrationStore = create<HydrationState & DebugState>()(
                 };
             }),
 
-            setDailyGoal: (goal) => set({ defaultGoal: goal }),
-            setGoalForDate: (date, goal) => set((state) => ({
-                dailyGoals: { ...state.dailyGoals, [date]: goal }
-            })),
+            setDailyGoal: (goal) => set((state) => {
+                const pending = [...state.unsyncedGoals];
+                if (!pending.includes('default')) pending.push('default');
+                return { defaultGoal: goal, unsyncedGoals: pending };
+            }),
+            setGoalForDate: (date, goal) => set((state) => {
+                const pending = [...state.unsyncedGoals];
+                if (!pending.includes(date)) pending.push(date);
+                return { 
+                    dailyGoals: { ...state.dailyGoals, [date]: goal },
+                    unsyncedGoals: pending
+                };
+            }),
             setDeviceStatus: (status) => set({ deviceStatus: status }),
             setDeviceName: (name) => set({ deviceName: name }),
             setLastPacketHex: (hex) => set({ lastPacketHex: hex }),
@@ -128,6 +138,9 @@ export const useHydrationStore = create<HydrationState & DebugState>()(
             })),
             markManualEntriesAsSyncedGarmin: (ids: string[]) => set((state) => ({
                 manualEntries: state.manualEntries.map(e => ids.includes(e.id) ? { ...e, is_synced_garmin: true } : e)
+            })),
+            markGoalsAsSyncedCloud: (dates: string[]) => set((state) => ({
+                unsyncedGoals: state.unsyncedGoals.filter(d => !dates.includes(d))
             })),
 
             theme: 'system',
@@ -187,6 +200,29 @@ export const useHydrationStore = create<HydrationState & DebugState>()(
                 return {
                     presets: Array.from(presetMap.values())
                 };
+            }),
+
+            mergeGoalSyncData: (serverGoals: Record<string, number>) => set((state) => {
+                const newGoals = { ...state.dailyGoals };
+                let newDefault = state.defaultGoal;
+
+                // Merge server goals, prioritizing local unsynced goals.
+                Object.entries(serverGoals).forEach(([date, goal]) => {
+                    if (date === 'default') {
+                        if (!state.unsyncedGoals.includes('default')) {
+                            newDefault = goal;
+                        }
+                    } else {
+                        if (!state.unsyncedGoals.includes(date)) {
+                            newGoals[date] = goal;
+                        }
+                    }
+                });
+
+                return {
+                    dailyGoals: newGoals,
+                    defaultGoal: newDefault
+                };
             })
         }),
         {
@@ -201,7 +237,8 @@ export const useHydrationStore = create<HydrationState & DebugState>()(
                 defaultGoal: state.defaultGoal,
                 theme: state.theme,
                 pendingDeletions: state.pendingDeletions,
-                pendingPresetDeletions: state.pendingPresetDeletions
+                pendingPresetDeletions: state.pendingPresetDeletions,
+                unsyncedGoals: state.unsyncedGoals
                 // Don't persist user, let supabase auth listener handle it
             }),
         }

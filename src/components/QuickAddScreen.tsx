@@ -18,7 +18,7 @@ export const QuickAddScreen: React.FC<QuickAddScreenProps> = ({ onClose }) => {
 
     // Main Form State
     const [name, setName] = useState('Water');
-    const [volume, setVolume] = useState('250');
+    const [volume, setVolume] = useState('700');
     const [factor, setFactor] = useState('100');
     const [isSaveToggleOn, setIsSaveToggleOn] = useState(false);
 
@@ -155,7 +155,7 @@ export const QuickAddScreen: React.FC<QuickAddScreenProps> = ({ onClose }) => {
                     </button>
                     <button
                         type="button"
-                        onClick={() => applyPresetValues({ name: 'Coffee', volumeMl: 300, hydrationFactor: 90 })}
+                        onClick={() => applyPresetValues({ name: 'Coffee', volumeMl: 180, hydrationFactor: 90 })}
                         className="flex flex-col items-center justify-center min-w-[100px] h-[100px] rounded-[2rem] bg-white border border-violet-100 shadow-sm hover:bg-violet-50 transition active:scale-95 p-4 shrink-0 snap-center"
                     >
                         <Coffee className="w-8 h-8 mb-2 text-fuchsia-500" />
