@@ -117,6 +117,9 @@ class handler(BaseHTTPRequestHandler):
             garmin = Garmin(email, password)
             
             try:
+                print("Garmin sync temporarily disabled to avoid 429 errors.", file=sys.stdout)
+                self.send_success_j({'status': 'skipped', 'reason': 'paused'})
+                return # <--- This stops the function here before it touches Garmin
                 # Try standard login (might try to load tokens and fail)
                 garmin.login()
                 print("Garmin Login Successful (Standard)", file=sys.stdout)
