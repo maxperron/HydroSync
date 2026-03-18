@@ -1,2 +1,2 @@
-garminconnect
+garminconnect @ git+https://github.com/cyberjunky/python-garminconnect.git@7840eb1314f00b336342a85538bc65520559ec7a
 supabase
