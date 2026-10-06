@@ -16,7 +16,7 @@ export const useHydrationStore = create<HydrationState & DebugState>()(
             manualEntries: [],
             presets: [],
             dailyGoals: {},
-            defaultGoal: 2500, // Default 2.5L
+            defaultGoal: 3000, // Default 3L
             deviceStatus: 'disconnected',
             deviceName: null,
             batteryLevel: null,
